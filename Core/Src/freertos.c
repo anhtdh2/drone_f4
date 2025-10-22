@@ -19,9 +19,10 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "FreeRTOS.h"
-#include "task.h"
-#include "main.h"
 #include "cmsis_os.h"
+#include "main.h"
+#include "task.h"
+
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -32,6 +33,7 @@
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
 void logger_task(void *argument);
+void gps_processing_task(void *argument);
 
 /* USER CODE END PTD */
 
@@ -47,8 +49,8 @@ void logger_task(void *argument);
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN Variables */
-
-
+osThreadId gpsProcessingTaskHandle;
+osSemaphoreId gpsDataSemHandle;
 /* USER CODE END Variables */
 osThreadId defaultTaskHandle;
 
@@ -57,12 +59,14 @@ osThreadId defaultTaskHandle;
 
 /* USER CODE END FunctionPrototypes */
 
-void StartDefaultTask(void const * argument);
+void StartDefaultTask(void const *argument);
 
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 
 /* GetIdleTaskMemory prototype (linked to static allocation support) */
-void vApplicationGetIdleTaskMemory( StaticTask_t **ppxIdleTaskTCBBuffer, StackType_t **ppxIdleTaskStackBuffer, uint32_t *pulIdleTaskStackSize );
+void vApplicationGetIdleTaskMemory(StaticTask_t **ppxIdleTaskTCBBuffer,
+                                   StackType_t **ppxIdleTaskStackBuffer,
+                                   uint32_t *pulIdleTaskStackSize);
 
 /* USER CODE BEGIN GET_IDLE_TASK_MEMORY */
 static StaticTask_t xIdleTaskTCBBuffer;
@@ -79,10 +83,10 @@ void vApplicationGetIdleTaskMemory(StaticTask_t **ppxIdleTaskTCBBuffer,
 /* USER CODE END GET_IDLE_TASK_MEMORY */
 
 /**
-  * @brief  FreeRTOS initialization
-  * @param  None
-  * @retval None
-  */
+ * @brief  FreeRTOS initialization
+ * @param  None
+ * @retval None
+ */
 void MX_FREERTOS_Init(void) {
   /* USER CODE BEGIN Init */
 
@@ -94,6 +98,9 @@ void MX_FREERTOS_Init(void) {
 
   /* USER CODE BEGIN RTOS_SEMAPHORES */
   /* add semaphores, ... */
+  osSemaphoreDef(gpsDataSem);
+  gpsDataSemHandle = osSemaphoreCreate(osSemaphore(gpsDataSem), 1);
+  osSemaphoreWait(gpsDataSemHandle, 0);
   /* USER CODE END RTOS_SEMAPHORES */
 
   /* USER CODE BEGIN RTOS_TIMERS */
@@ -113,8 +120,11 @@ void MX_FREERTOS_Init(void) {
   /* add threads, ... */
   osThreadDef(logger, logger_task, osPriorityLow, 0, 256);
   osThreadCreate(osThread(logger), NULL);
-  /* USER CODE END RTOS_THREADS */
 
+  // Định nghĩa và tạo task xử lý GPS mới
+  osThreadDef(gps_processing, gps_processing_task, osPriorityNormal, 0, 512);
+  gpsProcessingTaskHandle = osThreadCreate(osThread(gps_processing), NULL);
+  /* USER CODE END RTOS_THREADS */
 }
 
 /* USER CODE BEGIN Header_StartDefaultTask */
@@ -124,8 +134,7 @@ void MX_FREERTOS_Init(void) {
  * @retval None
  */
 /* USER CODE END Header_StartDefaultTask */
-void StartDefaultTask(void const * argument)
-{
+void StartDefaultTask(void const *argument) {
   /* USER CODE BEGIN StartDefaultTask */
   /* Infinite loop */
   for (;;) {
@@ -151,8 +160,29 @@ void logger_task(void *argument) {
                 logger_log("GPS Fix: NO, Sats: %d\r\n", current_gps_data.satellites_tracked);
             }
         }
-        osDelay(1000);
+        osDelay(1000); // Tần suất log ra thông tin đã xử lý
     }
 }
 
+// Buffer nhận dữ liệu DMA và kích thước dữ liệu nhận được
+// Chúng sẽ được cập nhật trong callback và được xử lý trong task này
+extern uint8_t dma_rx_buffer[];
+extern volatile uint16_t dma_rx_size;
+
+/**
+ * @brief Task chuyên xử lý buffer NMEA nhận được từ DMA.
+ * @param argument: Không dùng
+ * @retval None
+ */
+void gps_processing_task(void *argument) {
+    for(;;) {
+        // Đợi tín hiệu từ callback DMA báo rằng đã có dữ liệu mới
+        if (osSemaphoreWait(gpsDataSemHandle, osWaitForever) == osOK) {
+            // Có dữ liệu mới, gọi hàm xử lý buffer
+            if (dma_rx_size > 0) {
+                neo_m10_process_buffer(dma_rx_buffer, dma_rx_size);
+            }
+        }
+    }
+}
 /* USER CODE END Application */

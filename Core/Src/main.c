@@ -51,10 +51,10 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-extern UART_HandleTypeDef huart2;
-extern uint8_t nmea_buffer[]; // Khai báo extern để callback thấy biến
-extern uint8_t nmea_buffer_index; // Khai báo extern
-
+#define DMA_RX_BUFFER_SIZE 2048
+uint8_t dma_rx_buffer[DMA_RX_BUFFER_SIZE];
+volatile uint16_t dma_rx_size = 0;
+extern osSemaphoreId gpsDataSemHandle;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -67,11 +67,20 @@ void MX_FREERTOS_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
-  if (huart->Instance == USART2) {
-    neo_m10_process_byte(nmea_buffer[nmea_buffer_index - 1]);
-    HAL_UART_Receive_IT(&huart2, &nmea_buffer[nmea_buffer_index], 1);
-  }
+void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
+{
+    if (huart->Instance == USART2)
+    {
+        // Lưu lại kích thước dữ liệu đã nhận
+        dma_rx_size = Size;
+
+        // Bắt đầu lại DMA để nhận dữ liệu tiếp theo
+        HAL_UARTEx_ReceiveToIdle_DMA(&huart2, dma_rx_buffer, DMA_RX_BUFFER_SIZE);
+        
+        // Giải phóng semaphore để đánh thức task xử lý GPS
+        // Sử dụng phiên bản an toàn cho ISR
+        osSemaphoreRelease(gpsDataSemHandle);
+    }
 }
 
 /* USER CODE END 0 */
@@ -114,7 +123,7 @@ int main(void)
   /* USER CODE BEGIN 2 */
   logger_init();
   neo_m10_init();
-
+  HAL_UARTEx_ReceiveToIdle_DMA(&huart2, dma_rx_buffer, DMA_RX_BUFFER_SIZE);
   /* USER CODE END 2 */
 
   /* Call init function for freertos objects (in cmsis_os2.c) */

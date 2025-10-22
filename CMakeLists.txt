@@ -34,6 +34,20 @@ enable_language(C ASM)
 # Create an executable object type
 add_executable(${CMAKE_PROJECT_NAME})
 
+# ===================================================================
+# ===== THÊM VÀO ĐOẠN MÃ NÀY =========================================
+# ===================================================================
+# Bật hỗ trợ số thực (floating point) cho các hàm printf và scanf
+# để có thể in và đọc các giá trị float/double.
+target_link_options(${CMAKE_PROJECT_NAME} PRIVATE
+    -Wl,-u_printf_float
+    -Wl,-u_scanf_float
+)
+# ===================================================================
+# ===== KẾT THÚC PHẦN THÊM VÀO =======================================
+# ===================================================================
+
+
 # Add STM32CubeMX generated sources
 add_subdirectory(cmake/stm32cubemx)
 
