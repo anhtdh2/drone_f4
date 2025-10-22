@@ -28,13 +28,14 @@
 /* USER CODE BEGIN Includes */
 #include "logger.h"
 #include "neo_m10.h"
+#include "mpu9250_i2c_driver.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
 void logger_task(void *argument);
 void gps_processing_task(void *argument);
-
+void imu_task(void *argument);
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -53,6 +54,7 @@ osThreadId gpsProcessingTaskHandle;
 osSemaphoreId gpsDataSemHandle;
 /* USER CODE END Variables */
 osThreadId defaultTaskHandle;
+osThreadId imuTaskHandle;
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
@@ -124,6 +126,9 @@ void MX_FREERTOS_Init(void) {
   // Định nghĩa và tạo task xử lý GPS mới
   osThreadDef(gps_processing, gps_processing_task, osPriorityNormal, 0, 512);
   gpsProcessingTaskHandle = osThreadCreate(osThread(gps_processing), NULL);
+
+  osThreadDef(imu, imu_task, osPriorityHigh, 0, 512); // Ưu tiên cao cho IMU
+  imuTaskHandle = osThreadCreate(osThread(imu), NULL);
   /* USER CODE END RTOS_THREADS */
 }
 
@@ -183,6 +188,23 @@ void gps_processing_task(void *argument) {
                 neo_m10_process_buffer(dma_rx_buffer, dma_rx_size);
             }
         }
+    }
+}
+
+void imu_task(void *argument) {
+    imu_data_t current_imu_data;
+    osDelay(500);
+
+    for(;;) {
+        if (mpu9250_read_data(&current_imu_data)) {
+            logger_log("A(g):%.2f,%.2f,%.2f G(dps):%.2f,%.2f,%.2f Tmp:%.2f \r\n",
+                       current_imu_data.accel[0], current_imu_data.accel[1], current_imu_data.accel[2],
+                       current_imu_data.gyro[0], current_imu_data.gyro[1], current_imu_data.gyro[2], current_imu_data.temp);
+        } else {
+            logger_log("Failed to read MPU6500 data.\r\n");
+        }
+        
+        osDelay(10); 
     }
 }
 /* USER CODE END Application */

@@ -30,6 +30,7 @@
 /* USER CODE BEGIN Includes */
 #include "logger.h"
 #include "neo_m10.h"
+#include "mpu9250_i2c_driver.h" 
 
 /* USER CODE END Includes */
 
@@ -123,6 +124,15 @@ int main(void)
   /* USER CODE BEGIN 2 */
   logger_init();
   neo_m10_init();
+  if (!mpu9250_init()) {
+      logger_log("MPU9250 HARDWARE ERROR!\r\n");
+      // Dừng chương trình ở đây nếu có lỗi phần cứng
+      while(1) {
+          // HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin); // Giả sử có 1 LED để báo lỗi
+          // HAL_Delay(100);
+      }
+  }
+
   HAL_UARTEx_ReceiveToIdle_DMA(&huart2, dma_rx_buffer, DMA_RX_BUFFER_SIZE);
   /* USER CODE END 2 */
 

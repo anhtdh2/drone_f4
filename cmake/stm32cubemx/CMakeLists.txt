@@ -25,6 +25,7 @@ set(MX_Application_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/main.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/logger.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/neo_m10.c
+     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/mpu9250_i2c_driver.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/gpio.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/freertos.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/dma.c
